@@ -31,17 +31,26 @@ public class PlayerMovement : MonoBehaviour
     public LayerMask groundLayer;
     private bool isGrounded;
 
-    private Rigidbody2D rb;
-    private Vector2 inputMovement;
-    private bool isTouchingWall = false;
-    private bool isWallSliding = false;
+    [Header("Grappling Hook Settings")]
+    public LayerMask grappleLayer;
+    public float maxGrappleDistance = 15f;
+    public float grappleSpeed = 10f;
+    public Transform grappleOrigin;
+    private LineRenderer grappleLine;
+    private bool isGrappling = false;
+    private Vector2 grapplePoint;
     private bool isWallHanging = false;
     private bool isWallClimbing = false;
     private bool isWallClimbPressed = false;
+    private bool isWallSliding = false;  // Add this variable to track wall sliding state
+
+    private Rigidbody2D rb;
+    private Vector2 inputMovement;
 
     private void Start()
     {
         rb = GetComponent<Rigidbody2D>();
+        grappleLine = GetComponent<LineRenderer>();
         currentStamina = maxStamina;
     }
 
@@ -53,7 +62,10 @@ public class PlayerMovement : MonoBehaviour
         // Handle horizontal movement
         float moveInput = inputMovement.x;
         float currentSpeed = isCrouching ? crouchSpeed : moveSpeed;
-        rb.linearVelocity = new Vector2(moveInput * currentSpeed, rb.linearVelocity.y);
+        if (!isGrappling)
+        {
+            rb.linearVelocity = new Vector2(moveInput * currentSpeed, rb.linearVelocity.y);  // Using velocity instead of linearVelocity
+        }
 
         // Flip sprite based on movement direction
         if (moveInput > 0)
@@ -75,17 +87,17 @@ public class PlayerMovement : MonoBehaviour
     private void HandleWallMechanics()
     {
         // Check if the player is touching a wall
-        isTouchingWall = Physics2D.Raycast(wallCheck.position, transform.right * transform.localScale.x, wallCheckDistance, wallLayer);
+        bool isTouchingWall = Physics2D.Raycast(wallCheck.position, transform.right * transform.localScale.x, wallCheckDistance, wallLayer);
 
         // Handle wall sliding
         if (isTouchingWall && !isGrounded && rb.linearVelocity.y < 0)
         {
-            isWallSliding = true;
+            isWallSliding = true;  // Set wall sliding state
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, wallSlideSpeed);
         }
         else
         {
-            isWallSliding = false;
+            isWallSliding = false;  // Set wall sliding state to false when not sliding
         }
 
         // Handle wall hanging
@@ -120,12 +132,31 @@ public class PlayerMovement : MonoBehaviour
             currentStamina += staminaRegenRate * Time.deltaTime;
             currentStamina = Mathf.Clamp(currentStamina, 0, maxStamina);
         }
+        else if (isGrounded && currentStamina < maxStamina)
+        {
+            currentStamina += staminaRegenRate * 2 * Time.deltaTime;  // Faster regen when grounded
+            currentStamina = Mathf.Clamp(currentStamina, 0, maxStamina);
+        }
     }
 
     private void DrainStamina(float amount)
     {
         currentStamina -= amount;
         currentStamina = Mathf.Clamp(currentStamina, 0, maxStamina);
+    }
+
+    private void FixedUpdate()
+    {
+        if (isGrappling)
+        {
+            Vector2 direction = (grapplePoint - (Vector2)transform.position).normalized;
+            rb.linearVelocity = direction * grappleSpeed;  // Using velocity instead of linearVelocity
+
+            if (Vector2.Distance(transform.position, grapplePoint) < 0.5f)
+            {
+                StopGrapple();
+            }
+        }
     }
 
     public void OnMove(InputAction.CallbackContext context)
@@ -175,6 +206,40 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    public void OnGrapple(InputAction.CallbackContext context)
+    {
+        if (context.performed && !isGrappling)
+        {
+            StartGrapple();
+        }
+        else if (context.canceled)
+        {
+            StopGrapple();
+        }
+    }
+
+    private void StartGrapple()
+    {
+        Vector2 aimDirection = inputMovement;
+        if (aimDirection == Vector2.zero) aimDirection = Vector2.up;
+
+        RaycastHit2D hit = Physics2D.Raycast(grappleOrigin.position, aimDirection, maxGrappleDistance, grappleLayer);
+        if (hit.collider != null)
+        {
+            isGrappling = true;
+            grapplePoint = hit.point;
+            grappleLine.enabled = true;
+            grappleLine.SetPosition(0, grappleOrigin.position);
+            grappleLine.SetPosition(1, grapplePoint);
+        }
+    }
+
+    private void StopGrapple()
+    {
+        isGrappling = false;
+        grappleLine.enabled = false;
+    }
+
     private void OnDrawGizmosSelected()
     {
         // Visualize ground check
@@ -184,5 +249,9 @@ public class PlayerMovement : MonoBehaviour
         // Visualize wall check
         Gizmos.color = Color.blue;
         Gizmos.DrawLine(wallCheck.position, wallCheck.position + transform.right * transform.localScale.x * wallCheckDistance);
+
+        // Visualize grapple range
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(grappleOrigin.position, maxGrappleDistance);
     }
 }
