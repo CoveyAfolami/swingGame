@@ -24,18 +24,18 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Wall Climb",
+                    "name": "Grapple",
                     "type": "Button",
-                    "id": "187eaf46-f066-4975-8a16-f44ab09f102e",
+                    "id": "48ff6568-9345-4ac4-a66c-96b786318a64",
                     "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Grapple",
+                    "name": "Wall Climb",
                     "type": "Button",
-                    "id": "48ff6568-9345-4ac4-a66c-96b786318a64",
+                    "id": "187eaf46-f066-4975-8a16-f44ab09f102e",
                     "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
