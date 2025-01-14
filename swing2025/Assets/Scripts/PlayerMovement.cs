@@ -28,91 +28,129 @@ public class PlayerMovement : MonoBehaviour
 
     private bool isTouchingWall = false;  // Whether the player is near a wall
     private bool isClimbingWall = false; // Whether the player is climbing the wall
-    private float wallStickTimer = 0.01f;   // Timer for wall sticking
+    private float wallStickTimer = 0.2f;   // Timer for wall sticking
 
     void Awake()
     {
-        // Get the Rigidbody2D component
-        rb = GetComponent<Rigidbody2D>();
-
-        // Set up Input Actions
-        playerInput = GetComponent<PlayerInput>();
-        moveAction = playerInput.actions["Move"];  // Input action for movement
-        jumpAction = playerInput.actions["Jump"];  // Input action for jump
-        crouchAction = playerInput.actions["Crouch"]; // Input action for crouch
+        InitializeReferences();
     }
 
     void Update()
     {
-        // Check if the player is grounded
-        isGrounded = Physics2D.OverlapCircle(transform.position - new Vector3(0, GetComponent<Collider2D>().bounds.extents.y, 0), groundCheckRadius, groundLayer);
-
-        // Get movement input from the new Input System
-        moveDirection = moveAction.ReadValue<Vector2>();
-
-        // Jump input (only allow jump if grounded)
-        if (isGrounded && jumpAction.triggered)
-        {
-            Jump();
-        }
-
-        // Check if the player is touching a wall
-        isTouchingWall = Physics2D.OverlapCircle(transform.position + new Vector3(GetComponent<Collider2D>().bounds.extents.x, 0), groundCheckRadius, wallLayer)
-                         || Physics2D.OverlapCircle(transform.position - new Vector3(GetComponent<Collider2D>().bounds.extents.x, 0), groundCheckRadius, wallLayer);
-
-        // Start wall climbing if touching a wall and crouch is held
-        if (isTouchingWall && crouchAction.IsPressed())
-        {
-            isClimbingWall = true;
-        }
-        else if (!crouchAction.IsPressed())
-        {
-            isClimbingWall = false;
-            wallStickTimer = wallStickTime; // Start stick timer when climbing ends
-        }
-
+        UpdateGroundedState();
+        ProcessInput();
+        UpdateWallInteraction();
         HandleWallClimbingVisuals();
+
+        Debug.Log($"isGrounded: {isGrounded}, isTouchingWall: {isTouchingWall}, isClimbingWall: {isClimbingWall}");
+        Debug.Log($"moveDirection: {moveDirection}, rb.velocity: {rb.linearVelocity}");
     }
 
     void FixedUpdate()
     {
         if (isClimbingWall)
         {
-            // Freeze horizontal movement while climbing
-            rb.linearVelocity = new Vector2(0, moveDirection.y * wallClimbSpeed);
+            ClimbWall();
         }
         else if (wallStickTimer > 0)
         {
-            // Reduce stick timer
-            wallStickTimer -= Time.fixedDeltaTime;
-
-            // Slightly reduce vertical velocity to simulate sticking
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, Mathf.Clamp(rb.linearVelocity.y, -2f, 0));
+            HandleWallStick();
         }
         else
         {
-            // Normal movement
-            rb.linearVelocity = new Vector2(moveDirection.x * moveSpeed, rb.linearVelocity.y);
+            Move();
+        }
+
+        Debug.Log($"FixedUpdate -> rb.velocity: {rb.linearVelocity}");
+    }
+
+    private void InitializeReferences()
+    {
+        rb = GetComponent<Rigidbody2D>();
+        playerInput = GetComponent<PlayerInput>();
+        moveAction = playerInput.actions["Move"];
+        jumpAction = playerInput.actions["Jump"];
+        crouchAction = playerInput.actions["Crouch"];
+        Debug.Log("PlayerInput actions initialized correctly.");
+    }
+
+    private void UpdateGroundedState()
+    {
+        isGrounded = Physics2D.OverlapCircle(transform.position - new Vector3(0, GetComponent<Collider2D>().bounds.extents.y, 0), groundCheckRadius, groundLayer);
+    }
+
+    private void ProcessInput()
+    {
+        moveDirection = moveAction.ReadValue<Vector2>();
+
+        if (isGrounded && jumpAction.triggered)
+        {
+            Jump();
         }
     }
 
-    void Jump()
+    private void UpdateWallInteraction()
     {
-        // Apply a force to the player for jumping
-        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+        isTouchingWall = Physics2D.OverlapCircle(transform.position + new Vector3(GetComponent<Collider2D>().bounds.extents.x, 0), groundCheckRadius, wallLayer)
+                         || Physics2D.OverlapCircle(transform.position - new Vector3(GetComponent<Collider2D>().bounds.extents.x, 0), groundCheckRadius, wallLayer);
+
+        if (isTouchingWall && crouchAction.IsPressed())
+        {
+            isClimbingWall = true;
+            Debug.Log("Wall climbing started.");
+        }
+        else if (!crouchAction.IsPressed())
+        {
+            isClimbingWall = false;
+            wallStickTimer = wallStickTime;
+            Debug.Log("Wall climbing stopped.");
+        }
     }
 
-    void HandleWallClimbingVisuals()
+    private void Move()
+    {
+        rb.linearVelocity = new Vector2(moveDirection.x * moveSpeed, rb.linearVelocity.y);
+
+
+
+    }
+
+    private void Jump()
+    {
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+        Debug.Log("Player Jumped!");
+    }
+
+    private void ClimbWall()
+    {
+        rb.linearVelocity = new Vector2(0, moveDirection.y * wallClimbSpeed);
+    }
+
+    private void HandleWallStick()
+    {
+        wallStickTimer -= Time.fixedDeltaTime;
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, Mathf.Clamp(rb.linearVelocity.y, -2f, 0));
+    }
+
+    private void HandleWallClimbingVisuals()
     {
         if (isClimbingWall)
         {
-            // Example: Change sprite color while climbing
             GetComponent<SpriteRenderer>().color = Color.blue;
         }
         else
         {
-            // Revert to default color
             GetComponent<SpriteRenderer>().color = Color.white;
         }
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position - new Vector3(0, GetComponent<Collider2D>().bounds.extents.y, 0), groundCheckRadius);
+
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position + new Vector3(GetComponent<Collider2D>().bounds.extents.x, 0), groundCheckRadius);
+        Gizmos.DrawWireSphere(transform.position - new Vector3(GetComponent<Collider2D>().bounds.extents.x, 0), groundCheckRadius);
     }
 }
